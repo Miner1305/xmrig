@@ -22,48 +22,49 @@
  *   along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <string.h>
-#include <thread>
-
-
-#if __ARM_FEATURE_CRYPTO && !defined(__APPLE__)
-#   include <sys/auxv.h>
-#   include <asm/hwcap.h>
-#endif
+#ifndef XMRIG_HWLOCCPUINFO_H
+#define XMRIG_HWLOCCPUINFO_H
 
 
 #include "backend/cpu/platform/BasicCpuInfo.h"
 
 
-xmrig::BasicCpuInfo::BasicCpuInfo() :
-    m_aes(false),
-    m_brand(),
-    m_avx2(false),
-    m_threads(std::thread::hardware_concurrency())
+typedef struct hwloc_obj *hwloc_obj_t;
+typedef struct hwloc_topology *hwloc_topology_t;
+
+
+namespace xmrig {
+
+
+class HwlocCpuInfo : public BasicCpuInfo
 {
-#   ifdef XMRIG_ARMv8
-    memcpy(m_brand, "ARMv8", 5);
-#   else
-    memcpy(m_brand, "ARMv7", 5);
-#   endif
+public:
+    HwlocCpuInfo();
+    ~HwlocCpuInfo() override;
 
-#   if __ARM_FEATURE_CRYPTO
-#   if !defined(__APPLE__)
-    m_aes = getauxval(AT_HWCAP) & HWCAP_AES;
-#   else
-    m_aes = true;
-#   endif
-#   endif
-}
+protected:
+    CpuThreads threads(const Algorithm &algorithm) const override;
+
+    inline const char *backend() const override     { return m_backend; }
+    inline size_t cores() const override            { return m_cores; }
+    inline size_t L2() const override               { return m_cache[2]; }
+    inline size_t L3() const override               { return m_cache[3]; }
+    inline size_t nodes() const override            { return m_nodes; }
+    inline size_t packages() const override         { return m_packages; }
+
+private:
+    void processTopLevelCache(hwloc_obj_t obj, const Algorithm &algorithm, CpuThreads &threads) const;
+
+    char m_backend[20];
+    hwloc_topology_t m_topology;
+    size_t m_cache[5];
+    size_t m_cores      = 0;
+    size_t m_nodes      = 0;
+    size_t m_packages   = 0;
+};
 
 
-const char *xmrig::BasicCpuInfo::backend() const
-{
-    return "basic_arm";
-}
+} /* namespace xmrig */
 
 
-xmrig::CpuThreads xmrig::BasicCpuInfo::threads(const Algorithm &) const
-{
-    return CpuThreads(threads());
-}
+#endif /* XMRIG_HWLOCCPUINFO_H */
